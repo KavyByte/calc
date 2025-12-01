@@ -1,9 +1,0 @@
-,ID,PLUS,MINUS,TIMES,DIVIDE,LPAREN,RPAREN,$
-ID,>,>,>,>,>,>,>,>
-PLUS,<,>,>,<,<,<,>,>
-MINUS,<,>,>,<,<,<,>,>
-TIMES,<,>,>,>,>,<,>,>
-DIVIDE,<,>,>,>,>,<,>,>
-LPAREN,<,<,<,<,<,<,=,None
-RPAREN,None,None,>,>,>,>,None,>
-$,<,<,<,<,<,<,None,=

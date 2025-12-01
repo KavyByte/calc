@@ -1,3 +1,0 @@
-S -> A S B
-A -> a A S | a | ε
-B -> S b S 
