@@ -1,0 +1,34 @@
+**Pseudocode for Modified DES Algorithm**
+
+**Input:** 64-bit original message and key (K).
+**Output:** 64-bit Cipher block
+
+1.  **Key Generation:**
+    *   Decode the initial key K to generate sixteen 48-bit sub-keys (Ki).
+    *   Generate six additional keys (k2, k3, k4, k5, k2', k3', k4', k5') with variable bit sizes (n-bits each).
+
+2.  **Initial Permutation:**
+    *   Permute the bits of the 64-bit message using the initial permutation (IP) table.
+    *   Divide the permuted block into two 32-bit halves: a left half (L0) and a right half (R0).
+
+3.  **16 Rounds of Encryption:**
+    *   For each round i from 1 to 16:
+        *   Li = Ri-1
+        *   Ri = Li-1 Xo f(Ri-1, Ki)
+        *   The function `f` is the Feistel function, which includes:
+            *   **Expansion:** Expand the 32-bit Ri-1 to 48 bits using the expansion permutation (E) table.
+            *   **Xo Operation:** Apply the modified Xo operation between the expanded Ri-1 and the sub-key Ki. The Xo operation is based on Galois Field (GF) arithmetic and uses state tables determined by the additional keys (k2, k3, k4, k5, etc.).
+            *   **S-box Substitution:** The output of the Xo operation is fed into S-boxes, which substitute and reduce the 48-bit block to 32 bits.
+            *   **P-box Permutation:** The output of the S-boxes is permuted using the P-box permutation.
+
+4.  **Final Blocks:**
+    *   After 16 rounds, swap the final left and right blocks (L16 and R16).
+
+5.  **Inverse Permutation:**
+    *   Apply the inverse initial permutation (IP-1) to the swapped blocks to get the 64-bit ciphertext.
+
+**Xo Operation Details:**
+
+The Xo operation replaces the traditional XOR. It uses multiple state tables based on keys k3, k4, k5. The values of these keys are selected from a set of possible bit sizes {2, 4, 6, 8, 10, 12}. The intersection of the plaintext bits and the key bits within these state tables produces the ciphertext value.
+
+Ciphrtext = Xo(plaintextRi(ks3, ks4, ks5) ⊕ key(ks3', ks4', ks5'))
