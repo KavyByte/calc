@@ -50,3 +50,6 @@ def ll1_parse(tokens):
         if production != ["ε"]:
             for symbol in reversed(production):
                 stack.append(symbol)
+
+tokens = eval(input("Enter Tokens : "))
+ll1_parse(tokens);

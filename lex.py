@@ -31,3 +31,5 @@ def lexical_analyzer(text):
     lexer.input(text)
     return [tok.type for tok in lexer]
 
+input_str = input("Enter string : ")
+print(lexical_analyzer(input_str))
