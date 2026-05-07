@@ -251,162 +251,7 @@ def run_custom_fft(image_path):
 
 run_custom_fft('image.jpg')
 
-
-import cv2
-import numpy as np
-import matplotlib.pyplot as plt
-
-# read image
-img = cv2.imread("image.jpg", 0)   # grayscale
-
-
-# 1. Image Negative
-# s = 255 - r
-
-negative = np.zeros_like(img)
-
-for i in range(img.shape[0]):
-    for j in range(img.shape[1]):
-        negative[i,j] = 255 - img[i,j]
-
-
-
-# 2. Logarithmic Transformation
-# s = c * log(1 + r)
-
-c = 255 / np.log(1 + np.max(img))
-log_img = np.zeros_like(img, dtype=float)
-
-for i in range(img.shape[0]):
-    for j in range(img.shape[1]):
-        log_img[i,j] = c * np.log(1 + img[i,j])
-
-log_img = np.array(log_img, dtype=np.uint8)
-
-
-
-# 3. Power Law Transformation
-# s = c * r^gamma
-
-gamma = 0.5
-c = 255 / (np.max(img)**gamma)
-
-power_img = np.zeros_like(img, dtype=float)
-
-for i in range(img.shape[0]):
-    for j in range(img.shape[1]):
-        power_img[i,j] = c * (img[i,j] ** gamma)
-
-power_img = np.array(power_img, dtype=np.uint8)
-
-
-
-# 4. Contrast Stretching
-
-r_min = np.min(img)
-r_max = np.max(img)
-
-contrast = np.zeros_like(img)
-
-for i in range(img.shape[0]):
-    for j in range(img.shape[1]):
-        contrast[i,j] = ((img[i,j] - r_min) / (r_max - r_min)) * 255
-
-
-
-# 5. Thresholding
-
-T = 120
-threshold = np.zeros_like(img)
-
-for i in range(img.shape[0]):
-    for j in range(img.shape[1]):
-        if img[i,j] > T:
-            threshold[i,j] = 255
-        else:
-            threshold[i,j] = 0
-
-
-
-# 6. Bit Plane Slicing
-
-bit_planes = []
-
-for k in range(8):
-    plane = np.zeros_like(img)
-
-    for i in range(img.shape[0]):
-        for j in range(img.shape[1]):
-            plane[i,j] = (img[i,j] >> k) & 1
-
-    plane = plane * 255
-    bit_planes.append(plane)
-
-
-
-# 7. Gray Level Slicing
-# highlight pixels between [a,b]
-
-a = 100
-b = 180
-
-gray_slice = np.zeros_like(img)
-
-for i in range(img.shape[0]):
-    for j in range(img.shape[1]):
-        if a <= img[i,j] <= b:
-            gray_slice[i,j] = 255
-        else:
-            gray_slice[i,j] = 0
-
-
-
-# Display results
-
-plt.figure(figsize=(12,8))
-
-plt.subplot(2,4,1)
-plt.imshow(img, cmap='gray')
-plt.title("Original")
-
-plt.subplot(2,4,2)
-plt.imshow(negative, cmap='gray')
-plt.title("Negative")
-
-plt.subplot(2,4,3)
-plt.imshow(log_img, cmap='gray')
-plt.title("Log Transform")
-
-plt.subplot(2,4,4)
-plt.imshow(power_img, cmap='gray')
-plt.title("Power Law")
-
-plt.subplot(2,4,5)
-plt.imshow(contrast, cmap='gray')
-plt.title("Contrast Stretch")
-
-plt.subplot(2,4,6)
-plt.imshow(threshold, cmap='gray')
-plt.title("Threshold")
-
-plt.subplot(2,4,7)
-plt.imshow(gray_slice, cmap='gray')
-plt.title("Gray Level Slice")
-
-plt.show()
-
-
-# show bit planes
-plt.figure(figsize=(10,5))
-
-for i in range(8):
-    plt.subplot(2,4,i+1)
-    plt.imshow(bit_planes[i], cmap='gray')
-    plt.title("Bit Plane "+str(i))
-
-plt.show()
-
------
+### Histogram
 
 import cv2
 import numpy as np
@@ -483,10 +328,8 @@ matched = np.zeros_like(img)
 for i in range(img.shape[0]):
     for j in range(img.shape[1]):
         matched[i,j] = mapping[img[i,j]]
-        
---- 
 
-# Zoom in
+### Zoom in
 
 import cv2
 import numpy as np
@@ -510,7 +353,7 @@ plt.imshow(zoom_in, cmap='gray')
 plt.title("Zoom In (Replication)")
 plt.show()
 
-# Zoom Out
+### Zoom Out
 
 factor = 2
 
@@ -526,7 +369,7 @@ plt.imshow(zoom_out, cmap='gray')
 plt.title("Zoom Out (Replication)")
 plt.show()
 
----
+### CLAHE
 
 import cv2
 import numpy as np
@@ -589,3 +432,71 @@ plt.subplot(1,2,2)
 plt.imshow(clahe_img, cmap='gray')
 plt.title("Manual CLAHE")
 plt.show()
+
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+def scale_image_manual(image_path, scale_factor):
+    # Load original image in grayscale
+    img = cv2.imread(image_path, 0)
+    if img is None: return print("File not found")
+    
+    h, w = img.shape
+    new_h, new_w = int(h * scale_factor), int(w * scale_factor)
+    
+    # Initialize output arrays
+    linear_img = np.zeros((h, new_w), dtype=np.uint8) # 1D horizontal for demo
+    bilinear_img = np.zeros((new_h, new_w), dtype=np.uint8) # 2D full scaling
+
+    # 1. Linear Interpolation (Horizontal Scaling)
+    for i in range(h):
+        for j in range(new_w):
+            # Map target column back to source column
+            src_j = j / scale_factor
+            j1 = int(np.floor(src_j))
+            j2 = min(j1 + 1, w - 1)
+            
+            weight = src_j - j1
+            # L(x) = (1-w)*P1 + w*P2
+            linear_img[i, j] = (1 - weight) * img[i, j1] + weight * img[i, j2]
+
+    # 2. Bilinear Interpolation (2D Scaling)
+    for i in range(new_h):
+        for j in range(new_w):
+            # Map target (i, j) back to source (src_i, src_j)
+            src_i = i / scale_factor
+            src_j = j / scale_factor
+            
+            # Find the 4 neighbors
+            i1, j1 = int(np.floor(src_i)), int(np.floor(src_j))
+            i2, j2 = min(i1 + 1, h - 1), min(j1 + 1, w - 1)
+            
+            # Calculate weights (fractions)
+            dy = src_i - i1
+            dx = src_j - j1
+            
+            # Bilinear Formula:
+            # Step 1: Interpolate horizontally between top two pixels and bottom two
+            # Step 2: Interpolate vertically between those two results
+            pixel_val = (img[i1, j1] * (1 - dx) * (1 - dy) +
+                         img[i1, j2] * dx * (1 - dy) +
+                         img[i2, j1] * (1 - dx) * dy +
+                         img[i2, j2] * dx * dy)
+            
+            bilinear_img[i, j] = int(pixel_val)
+
+    # Visualization
+    plt.figure(figsize=(15, 5))
+    plt.subplot(131), plt.imshow(img, cmap='gray'), plt.title(f'Original ({h}x{w})')
+    plt.subplot(132), plt.imshow(linear_img, cmap='gray'), plt.title(f'Linear Horiz. Scaling')
+    plt.subplot(133), plt.imshow(bilinear_img, cmap='gray'), plt.title(f'Bilinear ({new_h}x{new_w})')
+    plt.show()
+
+# To Upscale (e.g., 2x size)
+print("Upscaling...")
+scale_image_manual('image.jpg', scale_factor=2.0)
+
+# To Downscale (e.g., 0.5x size)
+print("Downscaling...")
+scale_image_manual('image.jpg', scale_factor=0.5)
