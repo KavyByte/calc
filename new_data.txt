@@ -1,0 +1,591 @@
+### Intensity Transformations & Slicing
+
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+def manual_intensity_transforms(image_path):
+    img = cv2.imread(image_path, 0)
+    rows, cols = img.shape
+    
+    # 1. Image Negative
+    neg = 255 - img
+    
+    # 2. Log Transform: s = c * log(1 + r)
+    c = 255 / np.log(1 + np.max(img))
+    log_img = np.zeros_like(img)
+    for i in range(rows):
+        for j in range(cols):
+            log_img[i,j] = c * np.log(1 + img[i,j])
+            
+    # 3. Power-Law (Gamma): s = c * r^gamma
+    gamma = 2.0
+    gamma_img = np.zeros_like(img, dtype=np.float32)
+    for i in range(rows):
+        for j in range(cols):
+            gamma_img[i,j] = 255 * ((img[i,j] / 255.0) ** gamma)
+    
+    # 4. Contrast Stretching
+    r_min, r_max = np.min(img), np.max(img)
+    stretched = np.zeros_like(img)
+    for i in range(rows):
+        for j in range(cols):
+            stretched[i,j] = ((img[i,j] - r_min) / (r_max - r_min)) * 255
+
+    # 5. Gray Level Slicing (Highlighting 100-150)
+    sliced = np.zeros_like(img)
+    for i in range(rows):
+        for j in range(cols):
+            if 100 <= img[i,j] <= 150:
+                sliced[i,j] = 255
+            else:
+                sliced[i,j] = 0
+
+    # Plotting
+    titles = ['Original', 'Negative', 'Log', 'Gamma', 'Stretched', 'Gray Slicing']
+    imgs = [img, neg, log_img, gamma_img.astype(np.uint8), stretched, sliced]
+    plt.figure(figsize=(15, 6))
+    for i in range(len(imgs)):
+        plt.subplot(2, 3, i+1), plt.imshow(imgs[i], cmap='gray'), plt.title(titles[i]), plt.axis('off')
+    plt.show()
+
+manual_intensity_transforms('image.jpg')
+
+
+### Manual Histogram Equalization
+
+def manual_histogram_equalization(image_path):
+    img = cv2.imread(image_path, 0)
+    rows, cols = img.shape
+    
+    # 1. Calculate Histogram
+    hist = np.zeros(256)
+    for val in img.ravel():
+        hist[val] += 1
+        
+    # 2. Calculate Normalized Cumulative Distribution Function (CDF)
+    cdf = hist.cumsum()
+    cdf_normalized = (cdf - cdf.min()) * 255 / (cdf.max() - cdf.min())
+    cdf_normalized = cdf_normalized.astype('uint8')
+    
+    # 3. Map pixels
+    img_equalized = cdf_normalized[img]
+    
+    plt.figure(figsize=(10, 5))
+    plt.subplot(121), plt.imshow(img, cmap='gray'), plt.title('Original')
+    plt.subplot(122), plt.imshow(img_equalized, cmap='gray'), plt.title('Equalized')
+    plt.show()
+
+manual_histogram_equalization('image.jpg')
+
+### Manual 2D Discrete Cosine Transform (DCT)
+
+def manual_dct_8x8(image_path):
+    img = cv2.imread(image_path, 0)
+    block = cv2.resize(img, (8, 8)).astype(np.float32) - 128  # Center data
+    N = 8
+    dct_result = np.zeros((N, N))
+    
+    for u in range(N):
+        for v in range(N):
+            sum_val = 0
+            for x in range(N):
+                for y in range(N):
+                    sum_val += block[x, y] * \
+                               np.cos((2*x + 1) * u * np.pi / (2*N)) * \
+                               np.cos((2*y + 1) * v * np.pi / (2*N))
+            
+            alpha_u = 1/np.sqrt(N) if u == 0 else np.sqrt(2/N)
+            alpha_v = 1/np.sqrt(N) if v == 0 else np.sqrt(2/N)
+            dct_result[u, v] = alpha_u * alpha_v * sum_val
+            
+    plt.imshow(np.log(1 + np.abs(dct_result)), cmap='gray'), plt.title('8x8 Manual DCT Coeffs')
+    plt.show()
+
+manual_dct_8x8('image.jpg')
+
+
+### Manual GLCM (Multiple Angles)
+
+def manual_glcm_all_angles(image_path, distance=1):
+    img = cv2.imread(image_path, 0)
+    img = (img // 32).astype(np.uint8) # Reduce to 8 levels (0-7)
+    levels = 8
+    h, w = img.shape
+    
+    # Angle offsets: (row_delta, col_delta)
+    angles = {"0": (0, 1), "45": (-1, 1), "90": (-1, 0), "135": (-1, -1)}
+    
+    plt.figure(figsize=(15, 4))
+    for idx, (name, (dr, dc)) in enumerate(angles.items()):
+        glcm = np.zeros((levels, levels))
+        for r in range(h):
+            for c in range(w):
+                nr, nc = r + dr, c + dc
+                if 0 <= nr < h and 0 <= nc < w:
+                    glcm[img[r, c], img[nr, nc]] += 1
+        
+        # Normalize
+        glcm /= (np.sum(glcm) if np.sum(glcm) != 0 else 1)
+        
+        plt.subplot(1, 4, idx+1)
+        plt.imshow(glcm, cmap='viridis')
+        plt.title(f'GLCM {name}°')
+    plt.show()
+
+manual_glcm_all_angles('image.jpg')
+
+
+### Built In FFT
+
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+def dft_fft_implementation(image_path):
+    # Load the image in grayscale
+    img = cv2.imread(image_path, 0)
+    if img is None:
+        print("Error: Image not found.")
+        return
+
+    # 1. Compute the 2D FFT
+    # np.fft.fft2 computes the 2D fast Fourier transform
+    f_transform = np.fft.fft2(img)
+    
+    # 2. Shift the zero-frequency component to the center of the spectrum
+    f_shift = np.fft.fftshift(f_transform)
+    
+    # 3. Calculate Magnitude Spectrum (Log-scaled for visibility)
+    # Adding 1 to avoid log(0)
+    magnitude_spectrum = 20 * np.log(np.abs(f_shift) + 1)
+    
+    # 4. Calculate Phase Spectrum
+    phase_spectrum = np.angle(f_shift)
+    
+    # 5. Reconstruct the image using Inverse DFT (IDFT)
+    # We must shift back before applying ifft2
+    f_ishift = np.fft.ifftshift(f_shift)
+    img_back = np.fft.ifft2(f_ishift)
+    img_back = np.abs(img_back)
+
+    # Visualization
+    plt.figure(figsize=(16, 8))
+    
+    plt.subplot(141), plt.imshow(img, cmap='gray')
+    plt.title('Original Image'), plt.axis('off')
+    
+    plt.subplot(142), plt.imshow(magnitude_spectrum, cmap='gray')
+    plt.title('Magnitude Spectrum'), plt.axis('off')
+    
+    plt.subplot(143), plt.imshow(phase_spectrum, cmap='gray')
+    plt.title('Phase Spectrum'), plt.axis('off')
+    
+    plt.subplot(144), plt.imshow(img_back, cmap='gray')
+    plt.title('Reconstructed (IDFT)'), plt.axis('off')
+    
+    plt.tight_layout()
+    plt.show()
+
+# Call the function
+dft_fft_implementation('image.jpg')
+
+### Manual FFT
+
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+def fft_1d(x):
+    """A recursive implementation of the 1D Cooley-Tukey FFT"""
+    N = len(x)
+    if N <= 1:
+        return x
+    
+    # Divide: Split into even and odd indices
+    even = fft_1d(x[0::2])
+    odd = fft_1d(x[1::2])
+    
+    # Conquer: Combine using the butterfly pattern
+    # Twiddle factors: exp(-2j * pi * k / N)
+    T = [np.exp(-2j * np.pi * k / N) * odd[k] for k in range(N // 2)]
+    
+    return [even[k] + T[k] for k in range(N // 2)] + \
+           [even[k] - T[k] for k in range(N // 2)]
+
+def fft_2d_custom(img):
+    """Applies 1D FFT to rows, then to columns"""
+    h, w = img.shape
+    
+    # Apply FFT to each row
+    rows_fft = np.zeros((h, w), dtype=complex)
+    for i in range(h):
+        rows_fft[i, :] = fft_1d(img[i, :])
+        
+    # Apply FFT to each column of the result
+    full_fft = np.zeros((h, w), dtype=complex)
+    for j in range(w):
+        full_fft[:, j] = fft_1d(rows_fft[:, j])
+        
+    return full_fft
+
+def run_custom_fft(image_path):
+    # Load and resize to a power of 2 (e.g., 256x256)
+    img = cv2.imread(image_path, 0)
+    img = cv2.resize(img, (256, 256))
+    
+    # Execute custom FFT
+    dft_custom = fft_2d_custom(img)
+    
+    # Manual Shift (Move low frequencies to center)
+    dft_shift = np.fft.fftshift(dft_custom)
+    
+    # Magnitude Spectrum for visualization
+    magnitude = 20 * np.log(np.abs(dft_shift) + 1)
+    
+    # Visualization
+    plt.figure(figsize=(10, 5))
+    plt.subplot(121), plt.imshow(img, cmap='gray'), plt.title('Original (256x256)')
+    plt.subplot(122), plt.imshow(magnitude, cmap='gray'), plt.title('Custom 2D FFT')
+    plt.show()
+
+run_custom_fft('image.jpg')
+
+
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+# read image
+img = cv2.imread("image.jpg", 0)   # grayscale
+
+
+# 1. Image Negative
+# s = 255 - r
+
+negative = np.zeros_like(img)
+
+for i in range(img.shape[0]):
+    for j in range(img.shape[1]):
+        negative[i,j] = 255 - img[i,j]
+
+
+
+# 2. Logarithmic Transformation
+# s = c * log(1 + r)
+
+c = 255 / np.log(1 + np.max(img))
+log_img = np.zeros_like(img, dtype=float)
+
+for i in range(img.shape[0]):
+    for j in range(img.shape[1]):
+        log_img[i,j] = c * np.log(1 + img[i,j])
+
+log_img = np.array(log_img, dtype=np.uint8)
+
+
+
+# 3. Power Law Transformation
+# s = c * r^gamma
+
+gamma = 0.5
+c = 255 / (np.max(img)**gamma)
+
+power_img = np.zeros_like(img, dtype=float)
+
+for i in range(img.shape[0]):
+    for j in range(img.shape[1]):
+        power_img[i,j] = c * (img[i,j] ** gamma)
+
+power_img = np.array(power_img, dtype=np.uint8)
+
+
+
+# 4. Contrast Stretching
+
+r_min = np.min(img)
+r_max = np.max(img)
+
+contrast = np.zeros_like(img)
+
+for i in range(img.shape[0]):
+    for j in range(img.shape[1]):
+        contrast[i,j] = ((img[i,j] - r_min) / (r_max - r_min)) * 255
+
+
+
+# 5. Thresholding
+
+T = 120
+threshold = np.zeros_like(img)
+
+for i in range(img.shape[0]):
+    for j in range(img.shape[1]):
+        if img[i,j] > T:
+            threshold[i,j] = 255
+        else:
+            threshold[i,j] = 0
+
+
+
+# 6. Bit Plane Slicing
+
+bit_planes = []
+
+for k in range(8):
+    plane = np.zeros_like(img)
+
+    for i in range(img.shape[0]):
+        for j in range(img.shape[1]):
+            plane[i,j] = (img[i,j] >> k) & 1
+
+    plane = plane * 255
+    bit_planes.append(plane)
+
+
+
+# 7. Gray Level Slicing
+# highlight pixels between [a,b]
+
+a = 100
+b = 180
+
+gray_slice = np.zeros_like(img)
+
+for i in range(img.shape[0]):
+    for j in range(img.shape[1]):
+        if a <= img[i,j] <= b:
+            gray_slice[i,j] = 255
+        else:
+            gray_slice[i,j] = 0
+
+
+
+# Display results
+
+plt.figure(figsize=(12,8))
+
+plt.subplot(2,4,1)
+plt.imshow(img, cmap='gray')
+plt.title("Original")
+
+plt.subplot(2,4,2)
+plt.imshow(negative, cmap='gray')
+plt.title("Negative")
+
+plt.subplot(2,4,3)
+plt.imshow(log_img, cmap='gray')
+plt.title("Log Transform")
+
+plt.subplot(2,4,4)
+plt.imshow(power_img, cmap='gray')
+plt.title("Power Law")
+
+plt.subplot(2,4,5)
+plt.imshow(contrast, cmap='gray')
+plt.title("Contrast Stretch")
+
+plt.subplot(2,4,6)
+plt.imshow(threshold, cmap='gray')
+plt.title("Threshold")
+
+plt.subplot(2,4,7)
+plt.imshow(gray_slice, cmap='gray')
+plt.title("Gray Level Slice")
+
+plt.show()
+
+
+# show bit planes
+plt.figure(figsize=(10,5))
+
+for i in range(8):
+    plt.subplot(2,4,i+1)
+    plt.imshow(bit_planes[i], cmap='gray')
+    plt.title("Bit Plane "+str(i))
+
+plt.show()
+
+-----
+
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+img = cv2.imread("image.jpg", 0)
+
+# Step 1: Histogram
+hist = [0]*256
+
+for i in range(img.shape[0]):
+    for j in range(img.shape[1]):
+        hist[img[i,j]] += 1
+
+
+# Step 2: PDF
+total_pixels = img.shape[0]*img.shape[1]
+pdf = [h/total_pixels for h in hist]
+
+
+# Step 3: CDF
+cdf = [0]*256
+cdf[0] = pdf[0]
+
+for i in range(1,256):
+    cdf[i] = cdf[i-1] + pdf[i]
+
+
+# Step 4: Transformation
+equalized = np.zeros_like(img)
+
+for i in range(img.shape[0]):
+    for j in range(img.shape[1]):
+        equalized[i,j] = int(cdf[img[i,j]] * 255)
+        
+---
+
+ref = cv2.imread("reference.jpg",0)
+
+# compute histograms
+hist_src = [0]*256
+hist_ref = [0]*256
+
+for i in range(img.shape[0]):
+    for j in range(img.shape[1]):
+        hist_src[img[i,j]] += 1
+
+for i in range(ref.shape[0]):
+    for j in range(ref.shape[1]):
+        hist_ref[ref[i,j]] += 1
+
+
+# compute CDFs
+cdf_src = np.cumsum(hist_src) / sum(hist_src)
+cdf_ref = np.cumsum(hist_ref) / sum(hist_ref)
+
+
+# create mapping
+mapping = [0]*256
+
+for i in range(256):
+    diff = abs(cdf_src[i] - cdf_ref[0])
+    idx = 0
+    for j in range(256):
+        if abs(cdf_src[i] - cdf_ref[j]) < diff:
+            diff = abs(cdf_src[i] - cdf_ref[j])
+            idx = j
+    mapping[i] = idx
+
+
+# apply mapping
+matched = np.zeros_like(img)
+
+for i in range(img.shape[0]):
+    for j in range(img.shape[1]):
+        matched[i,j] = mapping[img[i,j]]
+        
+--- 
+
+# Zoom in
+
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+img = cv2.imread("image.jpg",0)
+
+factor = 2   # zoom factor
+
+h, w = img.shape
+
+zoom_in = np.zeros((h*factor, w*factor), dtype=np.uint8)
+
+for i in range(h):
+    for j in range(w):
+        for x in range(factor):
+            for y in range(factor):
+                zoom_in[i*factor + x][j*factor + y] = img[i][j]
+
+plt.imshow(zoom_in, cmap='gray')
+plt.title("Zoom In (Replication)")
+plt.show()
+
+# Zoom Out
+
+factor = 2
+
+h, w = img.shape
+
+zoom_out = np.zeros((h//factor, w//factor), dtype=np.uint8)
+
+for i in range(0, h, factor):
+    for j in range(0, w, factor):
+        zoom_out[i//factor][j//factor] = img[i][j]
+
+plt.imshow(zoom_out, cmap='gray')
+plt.title("Zoom Out (Replication)")
+plt.show()
+
+---
+
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+
+def clahe_manual(img, tile_size=8, clip_limit=40):
+    h, w = img.shape
+    output = np.zeros_like(img)
+    
+    # number of tiles along each axis
+    n_tiles_y = h // tile_size
+    n_tiles_x = w // tile_size
+
+    # process each tile
+    for i in range(n_tiles_y):
+        for j in range(n_tiles_x):
+            # extract tile
+            y0 = i * tile_size
+            y1 = y0 + tile_size
+            x0 = j * tile_size
+            x1 = x0 + tile_size
+            tile = img[y0:y1, x0:x1]
+
+            # histogram
+            hist = np.zeros(256)
+            for pixel in tile.flatten():
+                hist[pixel] += 1
+
+            # clip histogram
+            excess = 0
+            for k in range(256):
+                if hist[k] > clip_limit:
+                    excess += hist[k] - clip_limit
+                    hist[k] = clip_limit
+            # redistribute excess equally
+            hist += excess // 256
+
+            # compute CDF
+            cdf = np.cumsum(hist)
+            cdf = 255 * cdf / cdf[-1]  # normalize to 0-255
+            cdf = cdf.astype(np.uint8)
+
+            # map tile pixels
+            for y in range(tile_size):
+                for x in range(tile_size):
+                    tile[y, x] = cdf[tile[y, x]]
+            output[y0:y1, x0:x1] = tile
+
+    # optional bilinear interpolation between tiles can be added for smoother transitions
+    return output
+
+img = cv2.imread("image.jpg", 0)
+clahe_img = clahe_manual(img, tile_size=16, clip_limit=40)
+
+plt.figure(figsize=(10,5))
+plt.subplot(1,2,1)
+plt.imshow(img, cmap='gray')
+plt.title("Original")
+plt.subplot(1,2,2)
+plt.imshow(clahe_img, cmap='gray')
+plt.title("Manual CLAHE")
+plt.show()
