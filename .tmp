@@ -1,0 +1,561 @@
+#include "stdafx.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include "mpi.h"
+int main(int argc, char* argv[])
+{
+    int    numprocs, rank, tag = 100, msg_size=64;
+    char   *buf;
+    MPI_Status status;
+    MPI_Init(&argc, &argv);
+    MPI_Comm_size(MPI_COMM_WORLD, &numprocs);
+    if (numprocs != 2) {
+        printf("The number of processes must be two!\n");
+        MPI_Finalize();
+        return(0);
+    }
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    printf("MPI process %d started...\n", rank);
+    fflush(stdout);
+    while (msg_size   < 10000000) {
+        msg_size = msg_size *2;
+        buf = (char *)malloc(msg_size * sizeof(char));
+        if (rank == 0) {
+            MPI_Send(buf, msg_size, MPI_BYTE, rank+1, tag, MPI_COMM_WORLD);
+            printf("Message of length %d to process %d\n",msg_size,rank+1);
+            fflush(stdout);
+            MPI_Recv(buf, msg_size, MPI_BYTE, rank+1, tag, MPI_COMM_WORLD,
+                     &status);
+        }
+        if (rank == 1) {
+//          MPI_Recv(buf, msg_size, MPI_BYTE, rank-1, tag, MPI_COMM_WORLD,
+//                   &status);
+            MPI_Send(buf, msg_size, MPI_BYTE, rank-1, tag, MPI_COMM_WORLD);
+            printf("Message of length %d to process %d\n",msg_size,rank-1);
+            fflush(stdout);
+            MPI_Recv(buf, msg_size, MPI_BYTE, rank-1, tag, MPI_COMM_WORLD,
+                     &status);
+        }
+        free(buf);
+    }
+    MPI_Finalize();
+}
+
+
+########
+
+
+#include <mpi.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_SIZE 1000000
+
+int main(int argc, char *argv[])
+{
+    int rank, size;
+    int msg_size;
+
+    MPI_Init(&argc, &argv);
+
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    if (size != 3)
+    {
+        if (rank == 0)
+        {
+            printf("Please run with exactly 3 processes.\n");
+        }
+
+        MPI_Finalize();
+        return 0;
+    }
+
+    msg_size = 1;
+
+    while (msg_size <= MAX_SIZE)
+    {
+        char *buffer = (char *)malloc(msg_size);
+
+        memset(buffer, 'A', msg_size);
+
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        double start_time = MPI_Wtime();
+
+        if (rank == 0)
+        {
+            MPI_Send(buffer, msg_size, MPI_CHAR, 1, 0, MPI_COMM_WORLD);
+
+            MPI_Recv(buffer, msg_size, MPI_CHAR, 2, 0,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+            printf("Process 0 completed exchange for message size = %d bytes\n",
+                   msg_size);
+        }
+
+        else if (rank == 1)
+        {
+            MPI_Recv(buffer, msg_size, MPI_CHAR, 0, 0,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+            MPI_Send(buffer, msg_size, MPI_CHAR, 2, 0, MPI_COMM_WORLD);
+        }
+
+        else if (rank == 2)
+        {
+            MPI_Recv(buffer, msg_size, MPI_CHAR, 1, 0,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+            MPI_Send(buffer, msg_size, MPI_CHAR, 0, 0, MPI_COMM_WORLD);
+        }
+
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        double end_time = MPI_Wtime();
+
+        if (rank == 0)
+        {
+            printf("Time taken = %f seconds\n\n",
+                   end_time - start_time);
+        }
+
+        free(buffer);
+
+        msg_size *= 2;
+    }
+
+    MPI_Finalize();
+
+    return 0;
+}
+
+#######
+
+sudo apt update
+sudo apt install mpich
+sudo apt install openmpi-bin openmpi-common libopenmpi-dev
+
+mpicc circular_mpi.c -o circular_mpi
+mpirun -np 3 ./circular_mpi
+
+
+########
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+
+void* square(void* arg)
+{
+    int num = *(int*)arg;
+
+    int* result = (int*)malloc(sizeof(int));
+
+    *result = num * num;
+
+    pthread_exit(result);
+}
+
+int main()
+{
+    pthread_t threads[5];
+    int numbers[5] = {1, 2, 3, 4, 5};
+
+    int sum = 0;
+
+    for (int i = 0; i < 5; i++)
+    {
+        pthread_create(&threads[i], NULL, square, &numbers[i]);
+    }
+
+    for (int i = 0; i < 5; i++)
+    {
+        int* result;
+
+        pthread_join(threads[i], (void**)&result);
+
+        printf("Square = %d\n", *result);
+
+        sum += *result;
+
+        free(result);
+    }
+
+    printf("Final Sum = %d\n", sum);
+
+    return 0;
+}
+
+#######
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+
+int primes[10] = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29};
+
+unsigned long long factorial(int n)
+{
+    unsigned long long fact = 1;
+
+    for (int i = 1; i <= n; i++)
+    {
+        fact *= i;
+    }
+
+    return fact;
+}
+
+void* compute_factorial(void* arg)
+{
+    int index = *(int*)arg;
+
+    unsigned long long* result =
+        (unsigned long long*)malloc(sizeof(unsigned long long));
+
+    *result = factorial(primes[index]);
+
+    pthread_exit(result);
+}
+
+int main()
+{
+    pthread_t threads[10];
+    int index[10];
+
+    unsigned long long sum = 0;
+
+    for (int i = 0; i < 10; i++)
+    {
+        index[i] = i;
+
+        pthread_create(&threads[i], NULL,
+                       compute_factorial, &index[i]);
+    }
+
+    for (int i = 0; i < 10; i++)
+    {
+        unsigned long long* result;
+
+        pthread_join(threads[i], (void**)&result);
+
+        printf("Factorial = %llu\n", *result);
+
+        sum += *result;
+
+        free(result);
+    }
+
+    printf("Sum of Factorials = %llu\n", sum);
+
+    return 0;
+}
+
+######
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+
+int arr[10] = {6, 28, 12, 496, 15, 20, 8128, 18, 24, 30};
+
+int perfect_count = 0;
+
+pthread_mutex_t lock;
+
+int isPerfect(int n)
+{
+    int sum = 0;
+
+    for (int i = 1; i < n; i++)
+    {
+        if (n % i == 0)
+        {
+            sum += i;
+        }
+    }
+
+    return sum == n;
+}
+
+void* checkPerfect(void* arg)
+{
+    int num = *(int*)arg;
+
+    if (isPerfect(num))
+    {
+        int* result = (int*)malloc(sizeof(int));
+
+        *result = num;
+
+        pthread_mutex_lock(&lock);
+
+        perfect_count++;
+
+        pthread_mutex_unlock(&lock);
+
+        pthread_exit(result);
+    }
+
+    pthread_exit(NULL);
+}
+
+int main()
+{
+    pthread_t threads[10];
+
+    pthread_mutex_init(&lock, NULL);
+
+    for (int i = 0; i < 10; i++)
+    {
+        pthread_create(&threads[i], NULL,
+                       checkPerfect, &arr[i]);
+    }
+
+    for (int i = 0; i < 10; i++)
+    {
+        int* result;
+
+        pthread_join(threads[i], (void**)&result);
+
+        if (result != NULL)
+        {
+            printf("Perfect Number = %d\n", *result);
+
+            free(result);
+        }
+    }
+
+    printf("Total Perfect Numbers = %d\n", perfect_count);
+
+    pthread_mutex_destroy(&lock);
+
+    return 0;
+}
+
+
+####
+
+
+#include <stdio.h>
+#include <omp.h>
+
+#define V 4
+#define INF 99999
+
+void printMatrix(int dist[V][V])
+{
+    printf("Shortest Distance Matrix:\n");
+
+    for (int i = 0; i < V; i++)
+    {
+        for (int j = 0; j < V; j++)
+        {
+            if (dist[i][j] == INF)
+                printf("INF ");
+            else
+                printf("%3d ", dist[i][j]);
+        }
+
+        printf("\n");
+    }
+}
+
+void floydWarshall(int dist[V][V])
+{
+    for (int k = 0; k < V; k++)
+    {
+        #pragma omp parallel
+        {
+            #pragma omp single
+
+            {
+                for (int i = 0; i < V; i++)
+                {
+                    for (int j = 0; j < V; j++)
+                    {
+                        #pragma omp task firstprivate(i, j, k)
+                        {
+                            if (dist[i][k] != INF &&
+                                dist[k][j] != INF &&
+                                dist[i][k] + dist[k][j] < dist[i][j])
+                            {
+                                dist[i][j] =
+                                    dist[i][k] + dist[k][j];
+                            }
+                        }
+                    }
+                }
+
+                #pragma omp taskwait
+            }
+        }
+    }
+}
+
+#####
+
+#include <stdio.h>
+#include <omp.h>
+
+int main() {
+    int x[10], y[10];
+
+    #pragma omp parallel
+    {
+        int mytid = omp_get_thread_num();
+
+        x[mytid] = mytid * 2;
+
+        #pragma omp barrier
+
+        if (mytid < 9)
+            y[mytid] = x[mytid] + x[mytid + 1];
+    }
+
+    return 0;
+}
+
+#####
+
+#include <stdio.h>
+#include <omp.h>
+
+int main() {
+    int a[10], b[10];
+
+    #pragma omp parallel
+    {
+        #pragma omp for nowait
+        for (int i = 0; i < 10; i++)
+            a[i] = i * 2;
+
+        #pragma omp for
+        for (int i = 0; i < 10; i++)
+            b[i] = a[i] * 5;
+    }
+
+    return 0;
+}
+
+
+#####
+
+#include <stdio.h>
+#include <omp.h>
+
+int main() {
+
+    omp_lock_t mylock;
+
+    omp_init_lock(&mylock);
+
+    int shared_variable = 0;
+
+    #pragma omp parallel
+    {
+        omp_set_lock(&mylock);
+
+        shared_variable++;
+
+        printf("Thread %d updated value to %d\n",
+               omp_get_thread_num(),
+               shared_variable);
+
+        omp_unset_lock(&mylock);
+    }
+
+    omp_destroy_lock(&mylock);
+
+    return 0;
+}
+
+
+#####
+
+
+
+#include <stdio.h>
+#include <omp.h>
+
+int main() {
+
+    omp_lock_t locka, lockb;
+
+    omp_init_lock(&locka);
+    omp_init_lock(&lockb);
+
+    #pragma omp parallel sections
+    {
+
+        #pragma omp section
+        {
+            omp_set_lock(&locka);
+            omp_set_lock(&lockb);
+
+            printf("Thread 1 working\n");
+
+            omp_unset_lock(&lockb);
+            omp_unset_lock(&locka);
+        }
+
+        #pragma omp section
+        {
+            omp_set_lock(&locka);
+            omp_set_lock(&lockb);
+
+            printf("Thread 2 working\n");
+
+            omp_unset_lock(&lockb);
+            omp_unset_lock(&locka);
+        }
+    }
+
+    omp_destroy_lock(&locka);
+    omp_destroy_lock(&lockb);
+
+    return 0;
+}
+
+
+#####
+
+
+#include <stdio.h>
+#include <omp.h>
+
+int fib(int n) {
+
+    int i, j;
+
+    if (n < 2)
+        return 1;
+
+    #pragma omp task shared(i)
+    i = fib(n - 1);
+
+    #pragma omp task shared(j)
+    j = fib(n - 2);
+
+    #pragma omp taskwait
+
+    return i + j;
+}
+
+int main() {
+
+    int result;
+
+    #pragma omp parallel
+    {
+        #pragma omp single
+        result = fib(10);
+    }
+
+    printf("Fib = %d\n", result);
+
+    return 0;
+}
